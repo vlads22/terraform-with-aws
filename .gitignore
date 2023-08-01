@@ -1,2 +1,19 @@
 project-1/.terraform
 project-2/.terraform
+
+# state files
+project-1/*.tfstate
+project-1/*.tfstate.*
+
+project-2/*.tfstate
+project-2/*.tfstate.*
+
+
+# crash log files
+project-1/*.log
+project-2/*.log
+
+
+# secrets
+project-1/*.tfvars
+project-2/*.tfvars
