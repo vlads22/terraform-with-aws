@@ -5,7 +5,7 @@ provider "aws" {
 }
 
 # create vpc
-resource "aws-vpc" "prod-vpc" {
+resource "aws_vpc" "prod-vpc" {
     cidr_block = "10.0.0.0/16"
     tags = {
         Name = "production"
@@ -14,12 +14,12 @@ resource "aws-vpc" "prod-vpc" {
 
 # create internet gateway
 resource "aws_internet_gateway" "gw" {
-    vpc_id = aws-vpc.prod-vpc.id
+    vpc_id = aws_vpc.prod-vpc.id
 }
 
 # Create route table
 resource "aws_route_table" "prod-route-table" {
-    vpc_id = aws-vpc.prod-vpc.id
+    vpc_id = aws_vpc.prod-vpc.id
     
     route {
         # all traffic from the vpc (0.0.0...) will go out to the internet using the internet gateway
@@ -29,7 +29,8 @@ resource "aws_route_table" "prod-route-table" {
 
     route {
         ipv6_cidr_block = "::/0"
-        egress_only_gateway_id = aws_internet_gatewasy.gw.id
+        # the default route for the ipv6 is going through this aws gateway
+        gateway_id = aws_internet_gateway.gw.id
     }
 
     tags = {
@@ -39,7 +40,7 @@ resource "aws_route_table" "prod-route-table" {
 
 # Create subnet where the webserver will reside.
 resource "aws_subnet" "subnet-1" {
-  vpc_id = aws_vpc.prod-vpc.ic
+  vpc_id = aws_vpc.prod-vpc.id
   cidr_block = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
@@ -101,6 +102,52 @@ resource "aws_security_group" "allow_web" {
     tags {
         Name = "allow_web"
     }
-
-
     }
+
+# network interface that creates a private ip address for the EC2 host through which it can communicate with the VPC and the internet
+resource "aws_network_interface" "web_server_nic" {
+    # the interface must be asociated with a subnet in order to determine the ip address range that can be used
+    subnet_id = aws_subnet.subnet-1.id
+    private_ips = ["10.0.1.50"]
+    security_groups = [aws_security_group.allow_web.id]
+}
+
+# assign a public ip address for the host so that it can be accessed from the internet
+# we use an elastic ip that we assign to the newly created network interface
+
+resource "aws_eip" "one" {
+    vpc = true
+    network_interface = aws_network_interface.web_server_nic.id
+    associate_with_private_ip = "10.0.1.50"
+    # we deploy the EIP only after deploying the internet gateway
+    depends_on = [aws_internet_gateway.gw]
+}
+
+# create the Ubuntu server
+resource "aws_instance" "web-server-instance" {
+    # the ami for the Ubuntu Server 18.04LTS on aws
+    ami = "ami-085925f297f89fce1"
+    instance_type = "t2.micro"
+    # same availability zone as for the subnet. hard coded in order not to get random zone
+    availability_zone = "us-east-1a"
+    # key pair set in aws
+    key_name = "main-key"
+    network_interface {
+      device_index = 0
+      network_interface_id = aws_network_interface.web_server_nic.id
+    }
+
+    # run commands on the server in order to install apache 
+    user_data = <<-EOF
+                #!/bin/bash
+                sudo apt update -y
+                sudo apt install apache2 -y
+                sudo systemctl start apache2
+                sudo bash -c 'echo the web server > /var/www/html/index.html'
+                EOF
+    tags = {
+        Name = "web-server"
+    }
+}
+
+# at this point run: terraform apply
