@@ -1,7 +1,7 @@
 provider "aws" {
     region = "us-east-1"
-    access_key = "AKIASDLDL4PYSSXUK2F2"
-    secret_key = "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"
+    access_key = "......"
+    secret_key = "......."
 }
 
 # create vpc
@@ -151,3 +151,4 @@ resource "aws_instance" "web-server-instance" {
 }
 
 # at this point run: terraform apply
+    # use ip address from the ubuntu ec2 instance
